@@ -35,3 +35,9 @@ model_ts*.txt
 .vscode
 _darcs
 .DS_Store
+
+# Ignore the datasets directory
+/datasets/
+/projects/ClipReid/output/
+/projects/ClipReid/data/
+/projects/FastDistill/logs
