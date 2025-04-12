@@ -1,0 +1,39 @@
+# _BASE_: Base-kd.yml
+
+# MODEL:
+#   META_ARCHITECTURE: Distiller
+#   BACKBONE:
+#     DEPTH: 34x      
+#     FEAT_DIM: 512    
+#     WITH_IBN: False
+
+# KD:
+#   MODEL_CONFIG: ("projects/FastDistill/logs/sports/vit_16/config.yaml",)
+#   MODEL_WEIGHTS: ("projects/FastDistill/logs/sports/vit_16/ViT-B-16_60.pth",)
+
+
+# DATASETS:
+#   NAMES: ("SportsreID",)
+#   TESTS: ("SportsreID",)
+
+# OUTPUT_DIR: projects/FastDistill/logs/sports/kd-r34-vit_16
+
+_BASE_: Base-kd.yml
+
+MODEL:
+  META_ARCHITECTURE: Distiller
+  BACKBONE:
+    DEPTH: 34x      
+    FEAT_DIM: 512    
+    WITH_IBN: False
+
+KD:
+  MODEL_CONFIG: ("projects/FastDistill/logs/dukemtmc/vit_16/config.yaml",)
+  MODEL_WEIGHTS: ("projects/FastDistill/logs/dukemtmc/vit_16/ViT-B-16_60.pth",)
+
+
+DATASETS:
+  NAMES: ("DukeMTMC",)
+  TESTS: ("DukeMTMC",)
+
+OUTPUT_DIR: projects/FastDistill/logs/dukemtmc/kd-r34-vit_16

@@ -1,0 +1,97 @@
+MODEL:
+  PRETRAIN_CHOICE: 'imagenet'
+  METRIC_LOSS_TYPE: 'triplet'
+  IF_LABELSMOOTH: 'on' #标签平滑有助于改善模型的泛化能力，避免过于自信的预测。
+  IF_WITH_CENTER: 'no' #表示是否使用中心损失。中心损失帮助提高特征的紧凑性，但这里选择不使用。
+  NAME: 'ViT-B-16'  #Vision Transformer 的一个变种（B 表示基础模型，16 表示分块大小为 16）。
+  STRIDE_SIZE: [16, 16] #卷积层的步长大小为 [16, 16]。
+  ID_LOSS_WEIGHT : 0.25 #行人身份损失（ID Loss）的权重。该损失通常用于区分不同的行人。
+  TRIPLET_LOSS_WEIGHT : 1.0  #triplet 损失的权重
+  I2T_LOSS_WEIGHT : 1.0 #图像到文本（Image-to-Text）的损失权重，可能是该任务中某种跨模态学习的部分。
+  # SIE_CAMERA: True
+  # SIE_COE : 1.0
+
+INPUT:
+  #训练和测试时，输入图像的尺寸分别是 256x128。
+  SIZE_TRAIN: [256, 128] 
+  SIZE_TEST: [256, 128]
+  PROB: 0.5 # 随机水平翻转图像的概率为 50%
+  RE_PROB: 0.5 # 随机擦除（Random Erasing）的概率为 50%
+  PADDING: 10 #输入图像的边缘填充大小为 10
+
+  #输入图像的像素均值和标准差，用于图像的标准化。
+  PIXEL_MEAN: [0.5, 0.5, 0.5] 
+  PIXEL_STD: [0.5, 0.5, 0.5]
+
+DATALOADER:
+  SAMPLER: 'softmax_triplet' #结合了 softmax 损失和 triplet 损失的采样策略，用于行人重识别任务。
+  NUM_INSTANCE: 4 #每个批次包含 4 个不同的实例（即不同的行人身份）
+  NUM_WORKERS: 8 #数据加载时使用 8 个并行工作线程。
+
+SOLVER:
+  STAGE1:
+    IMS_PER_BATCH: 64  #64
+    OPTIMIZER_NAME: "Adam"
+    BASE_LR: 0.00035 #基础学习率为 0.00035
+    WARMUP_LR_INIT: 0.00001 #学习率预热初始值为 0.00001
+    LR_MIN: 1e-6 #学习率的最小值
+    WARMUP_METHOD: 'linear' #预热方法为线性增长
+    WEIGHT_DECAY:  1e-4
+    WEIGHT_DECAY_BIAS: 1e-4
+    MAX_EPOCHS: 120
+    CHECKPOINT_PERIOD: 120 #每 120 个 epoch 保存一次模型检查点
+    LOG_PERIOD: 50
+    WARMUP_EPOCHS: 5 #预热阶段持续 5 个 epoch
+  
+  STAGE2:
+    IMS_PER_BATCH: 64  #64
+    OPTIMIZER_NAME: "Adam"
+    BASE_LR: 0.000005
+    WARMUP_METHOD: 'linear'
+    WARMUP_ITERS: 10
+    WARMUP_FACTOR: 0.1 #预热时的学习率缩放因子。
+    WEIGHT_DECAY:  0.0001
+    WEIGHT_DECAY_BIAS: 0.0001
+    LARGE_FC_LR: False
+    MAX_EPOCHS: 60 #
+    CHECKPOINT_PERIOD: 60 #
+    LOG_PERIOD: 50
+    EVAL_PERIOD: 60 #
+    BIAS_LR_FACTOR: 2
+    
+    STEPS: [30, 50]
+    GAMMA: 0.1 #学习率衰减系数
+  
+TEST:
+  EVAL: True
+  IMS_PER_BATCH: 64  #64
+  RE_RANKING: False
+  WEIGHT: ''
+  NECK_FEAT: 'before'
+  FEAT_NORM: 'yes'
+
+DATASETS:
+  NAMES: ('sportsreid')
+  ROOT_DIR: ('/data/zyr/CLIP-ReID-master/CLIP-ReID-master/data/sports')
+OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/sports'
+
+# DATASETS:
+#   NAMES: ('market1501')
+#   ROOT_DIR: ('/data/zyr/CLIP-ReID-master/CLIP-ReID-master/data/Market-1501-v15.09.15')
+# OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/market1501'
+
+
+# DATASETS:
+#   NAMES: ('dukemtmc')
+#   ROOT_DIR: ('/data/zyr/CLIP-ReID-master/CLIP-ReID-master/data/dukemtmcreid')
+# OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/dukemtmcreid'
+
+#   NAMES: ('occ_duke')
+#   ROOT_DIR: ('')
+# OUTPUT_DIR: ''
+
+#   NAMES: ('msmt17')
+#   ROOT_DIR: ('')
+# OUTPUT_DIR: ''
+
+# CUDA_VISIBLE_DEVICES=3 python train_clipreid.py --config_file configs/person/vit_clipreid.yml

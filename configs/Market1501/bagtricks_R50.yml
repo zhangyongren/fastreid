@@ -1,0 +1,17 @@
+_BASE_: ../Base-bagtricks.yml
+
+####本来没有
+MODEL:
+  META_ARCHITECTURE: Baseline
+  PIXEL_MEAN: [127.5, 127.5, 127.5]
+  PIXEL_STD: [127.5, 127.5, 127.5]
+
+  BACKBONE:
+    PRETRAIN: True
+    PRETRAIN_PATH: /home/zyr/.cache/torch/checkpoints/resnet50-19c8e357.pth
+
+DATASETS:
+  NAMES: ("Market1501",)
+  TESTS: ("Market1501",)
+
+OUTPUT_DIR: logs/market1501/bagtricks_R50
