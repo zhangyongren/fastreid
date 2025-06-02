@@ -120,7 +120,7 @@ class Checkpointer(object):
             assert os.path.isfile(path), "Checkpoint {} not found!".format(path)
 
         checkpoint = self._load_file(path)
-        print(checkpoint.keys()) 
+        #print(checkpoint.keys()) 
         incompatible = self._load_model(checkpoint)
         if (
                 incompatible is not None
@@ -133,7 +133,21 @@ class Checkpointer(object):
                 obj = self.checkpointables[key]
                 obj.load_state_dict(checkpoint.pop(key))  # pyre-ignore
 
-        # return any further checkpoint data
+        keys_to_remove = [
+            'backbone.bottleneck.running_mean', 
+            'backbone.bottleneck.running_var', 
+            'backbone.bottleneck.num_batches_tracked',
+            'backbone.bottleneck_proj.running_mean',
+            'backbone.bottleneck_proj.running_var',
+            'backbone.bottleneck_proj.num_batches_tracked'
+        ]
+
+        # 使用字典推导式移除不需要的层
+        checkpoint = {k: v for k, v in checkpoint.items() if k not in keys_to_remove}
+
+        # print("checkpoint keys:")
+        # for layer_name, param in checkpoint.items():
+        #     print(f"{layer_name}, {param.shape}")
         return checkpoint
 
     def has_checkpoint(self):
@@ -226,7 +240,7 @@ class Checkpointer(object):
         #checkpoint_state_dict = checkpoint.pop("model")  #当使用 pop("model") 时，它会删除 "model" 键并返回它的值
         if 'model' in checkpoint:
             checkpoint_state_dict = checkpoint.pop("model")
-        else:
+        else:  #vit-16没有model键
             checkpoint_state_dict = checkpoint
         self._convert_ndarray_to_tensor(checkpoint_state_dict)
 
@@ -247,9 +261,9 @@ class Checkpointer(object):
                     checkpoint_state_dict.pop(k)
 
         incompatible = self.model.load_state_dict(checkpoint_state_dict, strict=False)
-        print("all keys:")
-        for layer_name, param in checkpoint_state_dict.items():
-            print(f"{layer_name}, {param.shape}")
+        # print("all keys:")
+        # for layer_name, param in checkpoint_state_dict.items():
+        #     print(f"{layer_name}, {param.shape}")
         return _IncompatibleKeys(
             missing_keys=incompatible.missing_keys,
             unexpected_keys=incompatible.unexpected_keys,

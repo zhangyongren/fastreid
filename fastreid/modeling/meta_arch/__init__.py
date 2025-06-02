@@ -5,6 +5,7 @@
 """
 
 from .build import META_ARCH_REGISTRY, build_model
+from .make_model_clipreid import make_model
 
 
 # import all the meta_arch, so they will be registered

@@ -42,7 +42,7 @@ SOLVER:
 
 TEST:
   EVAL: True
-  IMS_PER_BATCH: 64
+  IMS_PER_BATCH: 1   
   RE_RANKING: False
   WEIGHT: ''
   NECK_FEAT: 'before'
@@ -55,8 +55,8 @@ TEST:
 
 DATASETS:
   NAMES: ('sportsreid')
-  ROOT_DIR: ('/data/zyr/CLIP-ReID-master/CLIP-ReID-master/data/sports')
-OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/sports_cnn'
+  ROOT_DIR: ('/data/zyr/fast-reid-master/projects/ClipReid/data/sports')
+OUTPUT_DIR: '/data/zyr/fast-reid-master/projects/ClipReid/output/sports_cnn'
 
 
 #   NAMES: ('dukemtmc')

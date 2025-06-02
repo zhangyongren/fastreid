@@ -12,8 +12,8 @@ from fastreid.modeling.backbones import build_backbone
 from fastreid.modeling.heads import build_heads
 from fastreid.modeling.losses import *
 from .build import META_ARCH_REGISTRY
-
-
+from torchvision import transforms as T 
+from timm.data.random_erasing import RandomErasing
 @META_ARCH_REGISTRY.register()
 class Baseline(nn.Module):
     """
@@ -126,9 +126,38 @@ class Baseline(nn.Module):
             images = batched_inputs
         else:
             raise TypeError("batched_inputs must be dict or torch.Tensor, but get {}".format(type(batched_inputs)))
+        #images.shape: torch.Size([256, 3, 256, 128])
+        #images.sub_(self.pixel_mean).div_(self.pixel_std)
+        # 假设 cfg 已经定义并包含必要的参数  
+        cfg = {  
+            'INPUT': {  
+                'SIZE_TRAIN': (256, 128),  # 训练时的目标尺寸  
+                'PROB': 0.5,                # 随机翻转的概率  
+                'PADDING': 10,               # 填充的像素数  
+                'PIXEL_MEAN': [0.5,0.5,0.5],  # 归一化的均值  
+                'PIXEL_STD': [0.5,0.5,0.5],   # 归一化的标准差  
+                'RE_PROB': 0.5              # 随机抹除的概率  
+            }  
+        }  
+        train_transforms = T.Compose([  
+            T.Resize(cfg['INPUT']['SIZE_TRAIN'], interpolation=3),  
+            T.RandomHorizontalFlip(p=cfg['INPUT']['PROB']),  
+            T.Pad(cfg['INPUT']['PADDING']),  
+            T.RandomCrop(cfg['INPUT']['SIZE_TRAIN']),  
+            T.Normalize(mean=cfg['INPUT']['PIXEL_MEAN'], std=cfg['INPUT']['PIXEL_STD']),  
+            # 自定义 RandomErasing 类需另外定义或导入  
+            RandomErasing(probability=cfg['INPUT']['RE_PROB'], mode='pixel', max_count=1, device='cpu')  
+        ])  
 
-        images.sub_(self.pixel_mean).div_(self.pixel_std)
-        return images
+        # 应用变换  
+        transformed_images = []  
+        for i in range(images.size(0)):  
+            img = images[i]  # 获取单张图像  
+            img = img / 255.0 
+            img_transformed = train_transforms(img)  # 应用变换  
+            transformed_images.append(img_transformed)  
+        transformed_images = torch.stack(transformed_images) 
+        return transformed_images
 
     def losses(self, outputs, gt_labels):
         """

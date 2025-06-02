@@ -8,10 +8,16 @@ import logging
 
 import torch
 import torch.nn.functional as F
-
+from yacs.config import CfgNode as CN
 from fastreid.config import get_cfg
+
 from fastreid.modeling.meta_arch import META_ARCH_REGISTRY, build_model, Baseline
 from fastreid.utils.checkpoint import Checkpointer
+
+from .make_model_clipreid import make_model
+from projects.ClipReid.config import cfg as cfgs
+# from .make_model import make_model
+# from projects.ClipReid.config import cfg_base as cfgs
 
 logger = logging.getLogger(__name__)
 
@@ -22,28 +28,53 @@ class Distiller(Baseline):
         super().__init__(cfg)
 
         # Get teacher model config
+        # model_ts = []
+        # for i in range(len(cfg.KD.MODEL_CONFIG)):
+        #     cfg_t = get_cfg()
+        #     cfg_t.merge_from_file(cfg.KD.MODEL_CONFIG[i])
+        #     cfg_t.defrost()
+        #     cfg_t.MODEL.META_ARCHITECTURE = "Baseline"
+        #     # Change syncBN to BN due to no DDP wrapper
+        #     if cfg_t.MODEL.BACKBONE.NORM == "syncBN":
+        #         cfg_t.MODEL.BACKBONE.NORM = "BN"
+        #     if cfg_t.MODEL.HEADS.NORM == "syncBN":
+        #         cfg_t.MODEL.HEADS.NORM = "BN"
+
+        #     model_t = build_model(cfg_t)
+        #     # No gradients for teacher model
+        #     for param in model_t.parameters():
+        #         param.requires_grad_(False)
+
+
+
+        #     logger.info("Loading teacher model weights ...")
+        #     Checkpointer(model_t).load(cfg.KD.MODEL_WEIGHTS[i])
+        #     del model_t.heads
+        #     print("model of teacher:")
+        #     for name, param in model_t.named_parameters():
+        #         print(name, param.numel())
+
+        #     model_ts.append(model_t)
+
         model_ts = []
-        for i in range(len(cfg.KD.MODEL_CONFIG)):
-            cfg_t = get_cfg()
-            cfg_t.merge_from_file(cfg.KD.MODEL_CONFIG[i])
-            cfg_t.defrost()
-            cfg_t.MODEL.META_ARCHITECTURE = "Baseline"
-            # Change syncBN to BN due to no DDP wrapper
-            if cfg_t.MODEL.BACKBONE.NORM == "syncBN":
-                cfg_t.MODEL.BACKBONE.NORM = "BN"
-            if cfg_t.MODEL.HEADS.NORM == "syncBN":
-                cfg_t.MODEL.HEADS.NORM = "BN"
+        #蒸馏：教师的模型在这里改动
+        cfgs.merge_from_file('/data/zyr/fast-reid-master/projects/ClipReid/configs/person/vit_clipreid.yml')
+        cfgs.freeze()
+        model_t = make_model(cfgs,99, 8, 1)
+        model_t.load_param(cfgs.TEST.WEIGHT)
+        if torch.cuda.device_count() > 1:
+            print('Using {} GPUs for inference'.format(torch.cuda.device_count()))
+            model_t = nn.DataParallel(model_t)
+        device = "cuda"
+        model_t.to(device)
+        print("freeze teacher model")
+        # for param in model_t.parameters():
+        #     param.requires_grad_(False)
+        model_ts.append(model_t)
+        # print("model of teacher:")
+        # for name, param in model_t.named_parameters():
+        #     print(name, param.numel())
 
-            model_t = build_model(cfg_t)
-
-            # No gradients for teacher model
-            for param in model_t.parameters():
-                param.requires_grad_(False)
-
-            logger.info("Loading teacher model weights ...")
-            Checkpointer(model_t).load(cfg.KD.MODEL_WEIGHTS[i])
-
-            model_ts.append(model_t)
 
         self.ema_enabled = cfg.KD.EMA.ENABLED
         self.ema_momentum = cfg.KD.EMA.MOMENTUM
@@ -90,6 +121,7 @@ class Distiller(Baseline):
 # img_paths: 这是每张图像的路径，用于标识或记录图像的来源位置。
         if self.training:
             images = self.preprocess_image(batched_inputs) #torch.Size([256, 3, 256, 128])
+            #print("images[0][0]", images[0][0])
             #images[0][0] tensor([[-2.1179, -2.1179, -2.1179,  ...,  0.8276,  1.1529,  1.3070], 应该已经经历过标准化处理,未经过标准化的范围是[0，255]
             
             # student model forward
@@ -101,7 +133,6 @@ class Distiller(Baseline):
             if targets.sum() < 0: targets.zero_()
 
             s_outputs = self.heads(s_feat, targets)
-            
             # s_outputs 包含三个主要字段:cls_outputs,pred_class_logits,features
             #cls_outputs size: torch.Size([256, 702])
             #pred_class_logits size: torch.Size([256, 702])
@@ -112,7 +143,7 @@ class Distiller(Baseline):
             #features: 经过池化和瓶颈处理后的特征表示 tensor([[ 1.1944,  0.9056, -1.0466, ..., -1.2170,  1.0566, -0.5922], ...])
             
             #print("s_outputs:", s_outputs)
-
+            #print("targets:", targets)
             t_outputs = []
             # teacher model forward
             predicted_class=[]
@@ -128,12 +159,14 @@ class Distiller(Baseline):
                     # max_prob, predicted_class = torch.max(teacher_cls_score, dim=1)
 
                     #若教师模型是vit-16
-                    t_feat = model_t.backbone(images)  
-                    t_outputs.append(t_feat[0][0]) #  t_feat[0][0]是cls_score
-                    max_prob, predicted_class = torch.max(t_feat[0][0], dim=1)
+                    score ,feat ,f= model_t(images)  
+                    
+                    t_outputs.append(score[0]) #  score[0]是cls_score
+                    max_prob, predicted_class = torch.max(score[0], dim=1)
+                    #print("predicted_class:", predicted_class)
 
             correct_predictions = (predicted_class == targets).sum().item()
-            print(f"正确预测的数量: {correct_predictions} / 256")
+            #print(f"正确预测的数量: {correct_predictions} / 256")
 
             losses = self.losses(s_outputs, t_outputs, targets)
             return losses
@@ -161,13 +194,13 @@ class Distiller(Baseline):
 
         # vit-16时：
         s_logits = s_outputs['pred_class_logits']  #[256, 702]
-        s_logits = F.softmax(s_logits, dim=1)   #我自己加的
-        s_logits = s_logits*1
+        # s_logits = F.softmax(s_logits, dim=1)   #我自己加的
+        
         loss_jsdiv = 0.
         for t_output in t_outputs:   #可能有多个教师模型，但本实验中就一个
             t_logits = t_output.detach()
-            t_logits = F.softmax(t_logits, dim=1)
-            t_logits = t_logits*1
+            t_logits = t_logits*64
+            # t_logits = F.softmax(t_logits, dim=1)
             loss_jsdiv += self.jsdiv_loss(s_logits, t_logits)
 
         loss_dict["loss_jsdiv"] = loss_jsdiv / len(t_outputs)

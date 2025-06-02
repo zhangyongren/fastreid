@@ -5,8 +5,8 @@ MODEL:
   IF_WITH_CENTER: 'no' #表示是否使用中心损失。中心损失帮助提高特征的紧凑性，但这里选择不使用。
   NAME: 'ViT-B-16'  #Vision Transformer 的一个变种（B 表示基础模型，16 表示分块大小为 16）。
   STRIDE_SIZE: [16, 16] #卷积层的步长大小为 [16, 16]。
-  ID_LOSS_WEIGHT : 0.25 #行人身份损失（ID Loss）的权重。该损失通常用于区分不同的行人。
-  TRIPLET_LOSS_WEIGHT : 1.0  #triplet 损失的权重
+  ID_LOSS_WEIGHT : 0.5 #行人身份损失（ID Loss）的权重。该损失通常用于区分不同的行人。
+  TRIPLET_LOSS_WEIGHT : 0.5  #triplet 损失的权重
   I2T_LOSS_WEIGHT : 1.0 #图像到文本（Image-to-Text）的损失权重，可能是该任务中某种跨模态学习的部分。
   # SIE_CAMERA: True
   # SIE_COE : 1.0
@@ -20,8 +20,8 @@ INPUT:
   PADDING: 10 #输入图像的边缘填充大小为 10
 
   #输入图像的像素均值和标准差，用于图像的标准化。
-  PIXEL_MEAN: [0.5, 0.5, 0.5] 
-  PIXEL_STD: [0.5, 0.5, 0.5]
+  PIXEL_MEAN: [0.485, 0.456, 0.406]
+  PIXEL_STD: [0.229, 0.224, 0.225]
 
 DATALOADER:
   SAMPLER: 'softmax_triplet' #结合了 softmax 损失和 triplet 损失的采样策略，用于行人重识别任务。
@@ -64,16 +64,17 @@ SOLVER:
   
 TEST:
   EVAL: True
-  IMS_PER_BATCH: 64  #64
+  IMS_PER_BATCH: 1  #64
   RE_RANKING: False
-  WEIGHT: ''
+  #WEIGHT: 'projects/ClipReid/output/dukemtmcreid_clipreid/ViT-B-16_60.pt'
+  WEIGHT: 'projects/ClipReid/output/sports_clipreid/ViT-B-16_60.pt'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
 DATASETS:
   NAMES: ('sportsreid')
-  ROOT_DIR: ('/data/zyr/CLIP-ReID-master/CLIP-ReID-master/data/sports')
-OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/sports'
+  ROOT_DIR: ('/data/zyr/fast-reid-master/projects/ClipReid/data/sports')
+OUTPUT_DIR: '/data/zyr/fast-reid-master/projects/ClipReid/output/sports_clipreid'
 
 # DATASETS:
 #   NAMES: ('market1501')
@@ -83,8 +84,8 @@ OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/sports'
 
 # DATASETS:
 #   NAMES: ('dukemtmc')
-#   ROOT_DIR: ('/data/zyr/CLIP-ReID-master/CLIP-ReID-master/data/dukemtmcreid')
-# OUTPUT_DIR: '/data/zyr/CLIP-ReID-master/CLIP-ReID-master/output/dukemtmcreid'
+#   ROOT_DIR: ('/data/zyr/fast-reid-master/projects/ClipReid/data/dukemtmcreid')
+# OUTPUT_DIR: '/data/zyr/fast-reid-master/projects/ClipReid/output/dukemtmcreid_clipreid'
 
 #   NAMES: ('occ_duke')
 #   ROOT_DIR: ('')

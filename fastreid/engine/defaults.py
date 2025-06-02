@@ -360,6 +360,8 @@ class DefaultTrainer(TrainerBase):
         It now calls :func:`fastreid.modeling.build_model`.
         Overwrite it if you'd like a different model.
         """
+        print("gggggggggggggggg")
+        print("cfg:",cfg)
         model = build_model(cfg)
         logger = logging.getLogger(__name__)
         logger.info("Model:\n{}".format(model))

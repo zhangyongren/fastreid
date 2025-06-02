@@ -12,22 +12,27 @@ from .data_utils import read_image
 class CommDataset(Dataset):
     """Image Person ReID Dataset"""
 
-    def __init__(self, img_items, transform=None, relabel=True):
+    def __init__(self, img_items, transform=None, relabel=True,is_train=True):
         self.img_items = img_items
         self.transform = transform
         self.relabel = relabel
-
+        
         pid_set = set()
         cam_set = set()
         for i in img_items:
             pid_set.add(i[1])
             cam_set.add(i[2])
-
-        self.pids = sorted(list(pid_set))
+        if is_train:
+            self.pids = sorted(list(pid_set), key=lambda x: int(x.split('_')[-1]))
+        else:
+            self.pids = sorted(list(pid_set))
         self.cams = sorted(list(cam_set))
+        # print("pids:", self.pids)
         if relabel:
             self.pid_dict = dict([(p, i) for i, p in enumerate(self.pids)])
             self.cam_dict = dict([(p, i) for i, p in enumerate(self.cams)])
+        # print("Number of PIDs:", len(self.pids))
+        # print(self.pid_dict)
 
     def __len__(self):
         return len(self.img_items)

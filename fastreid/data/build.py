@@ -38,17 +38,18 @@ def _train_loader_from_config(cfg, *, train_set=None, transforms=None, sampler=N
     if transforms is None:
         transforms = build_transforms(cfg, is_train=True)
 
-    if train_set is None:
+    if train_set is None: #需要
         train_items = list()
         for d in cfg.DATASETS.NAMES:
             data = DATASET_REGISTRY.get(d)(root=_root, **kwargs)
             if comm.is_main_process():
                 data.show_train()
             train_items.extend(data.train)
+        train_set = CommDataset(train_items, transforms, relabel=True,is_train = True) #重新编号pid
+        # for img_path, pid, camid in train_set.img_items:
+        #     print(f"Image Path: {img_path}, Original PID: {pid}")
 
-        train_set = CommDataset(train_items, transforms, relabel=True)
-
-    if sampler is None:
+    if sampler is None: #需要
         sampler_name = cfg.DATALOADER.SAMPLER_TRAIN
         num_instance = cfg.DATALOADER.NUM_INSTANCE
         mini_batch_size = cfg.SOLVER.IMS_PER_BATCH // comm.get_world_size()
@@ -115,7 +116,7 @@ def _test_loader_from_config(cfg, *, dataset_name=None, test_set=None, num_query
         if comm.is_main_process():
             data.show_test()
         test_items = data.query + data.gallery
-        test_set = CommDataset(test_items, transforms, relabel=False)
+        test_set = CommDataset(test_items, transforms, relabel=True,is_train=False) 
 
         # Update query number
         num_query = len(data.query)

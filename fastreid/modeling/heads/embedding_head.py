@@ -142,13 +142,15 @@ class EmbeddingHead(nn.Module):  #输入特征映射到一个嵌入空间
 
         # fmt: off
         if self.neck_feat == 'before':  feat = pool_feat[..., 0, 0]
-        elif self.neck_feat == 'after': feat = neck_feat
+        elif self.neck_feat == 'after': feat = neck_feat   #本实验是after
         else:                           raise KeyError(f"{self.neck_feat} is invalid for MODEL.HEADS.NECK_FEAT")
         # fmt: on
 
         #cls_outputs: 计算得到的分类输出。
         #pred_class_logits: 分类的原始得分（logits），乘以一个缩放因子 self.cls_layer.s，这通常用于调整得分范围。
         #features: 提取的特征，具体取决于 neck_feat 的配置
+        
+        #print("logits:", logits)
         
         return {
             "cls_outputs": cls_outputs,

@@ -58,7 +58,9 @@ class DukeMTMC(ImageDataset):
         pattern = re.compile(r'([-\d]+)_c(\d)')
 
         data = []
+        ii=0
         for img_path in img_paths:
+            ii += 1
             pid, camid = map(int, pattern.search(img_path).groups())
             assert 1 <= camid <= 8
             camid -= 1  # index starts from 0
@@ -66,5 +68,6 @@ class DukeMTMC(ImageDataset):
                 pid = self.dataset_name + "_" + str(pid)
                 camid = self.dataset_name + "_" + str(camid)
             data.append((img_path, pid, camid))
-
+            # if ii<100:
+            #     print(f"Image Path: {img_path}, PID: {pid}, CAMID: {camid}")
         return data

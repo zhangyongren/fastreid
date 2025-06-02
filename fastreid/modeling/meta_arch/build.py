@@ -20,7 +20,13 @@ def build_model(cfg):
     Build the whole model architecture, defined by ``cfg.MODEL.META_ARCHITECTURE``.
     Note that it does not load any weights from ``cfg``.
     """
+
     meta_arch = cfg.MODEL.META_ARCHITECTURE
     model = META_ARCH_REGISTRY.get(meta_arch)(cfg)
+    # print("model of teacher:")
+    # for name, param in model.named_parameters():
+    #     print(name, param.numel())
     model.to(torch.device(cfg.MODEL.DEVICE))
+
     return model
+
