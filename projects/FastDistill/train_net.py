@@ -34,11 +34,8 @@ def main(args):
         Checkpointer(model, save_dir=cfg.OUTPUT_DIR).load(cfg.MODEL.WEIGHTS)
         res = DefaultTrainer.test(cfg, model)
         return res
-    print("cfg222222222222222222222222222222222222222222")
     print(cfg)
-    print("cfg222222222222222222222222222222222222222222")
     trainer = DefaultTrainer(cfg)
-    print("111111111111111111111111111111111111111111111111")
     trainer.resume_or_load(resume=args.resume)
     return trainer.train()
 

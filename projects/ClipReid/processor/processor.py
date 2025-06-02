@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import datetime
 import torch
 import torch.nn as nn
 from utils.meter import AverageMeter
@@ -44,7 +45,7 @@ def do_train(cfg,
     import time
     from datetime import timedelta
     all_start_time = time.monotonic()
-    logger.info("model: {}".format(model))
+
 
     for epoch in range(1, epochs + 1):
         start_time = time.time()
@@ -72,7 +73,15 @@ def do_train(cfg,
                 # score和feat就是forward函数的返回值
                 #score（即 [cls_score, cls_score_proj]）用于分类任务的得分输出，表示每个类别的预测概率或得分。
                 #feat（即 [img_feature_last, img_feature, img_feature_proj]）是图像的特征表示，通常用于度量学习任务中的损失计算，表示图像的高层语义信息。
+
+                #img.shape: torch.Size([256, 3, 256, 128])
+                # print("vid[0]", vid[0])
+                # print("img[0][0]", img[0][0])
                 score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
+
+                max_prob, predicted_class = torch.max(score[0], dim=1)
+                correct_predictions = (predicted_class == target).sum().item()
+                print(f"正确预测的数量: {correct_predictions} / 256")
                 loss = loss_fn(score, feat, target, target_cam)
 
             scaler.scale(loss).backward()
@@ -189,8 +198,11 @@ def do_inference(cfg,
     model.eval()
     img_path_list = []
 
+    # 记录开始时间
+    start_time = time.perf_counter()
+    sum_time = 0
     for n_iter, (img, pid, camid, camids, target_view, imgpath) in enumerate(val_loader):
-        
+
         with torch.no_grad():
             img = img.to(device)
             if cfg.MODEL.SIE_CAMERA:
@@ -201,10 +213,32 @@ def do_inference(cfg,
                 target_view = target_view.to(device)
             else: 
                 target_view = None
+
+            # 记录每个批次开始时的时间
+            batch_start_time = time.perf_counter()
+
             feat = model(img, cam_label=camids, view_label=target_view) # view_label为none
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
 
+            # 计算批次的推理时间
+            batch_end_time = time.perf_counter()
+            batch_time = batch_end_time - batch_start_time
+
+            # 计算每张图片的推理时间
+            batch_size = img.size(0)  # 批次大小
+            img_time = batch_time / batch_size  # 每张图像的推理时间
+            sum_time += img_time
+            if n_iter % 10 == 0:  # 每10个批次打印一次
+                logger.info(f"Batch {n_iter} - Time per image: {img_time:.6f}s")
+
+
+    # 计算总的推理时间
+    total_end_time = time.perf_counter()
+    #total_time = total_end_time - start_time
+    total_time = sum_time 
+    total_time_str = str(datetime.timedelta(seconds=total_time))
+    logger.info(f"Total inference time: {total_time_str} ({total_time / len(val_loader.dataset):.6f}s per image)")
 
     cmc, mAP, _, _, _, _, _ = evaluator.compute()
     logger.info("Validation Results ")

@@ -1,17 +1,3 @@
-_BASE_: Base-kd.yml
-
-MODEL:
-  BACKBONE:
-    DEPTH: 34x
-    FEAT_DIM: 512
-    WITH_IBN: False
-
-DATASETS:
-  NAMES: ("DukeMTMC",)
-  TESTS: ("DukeMTMC",)
-
-OUTPUT_DIR: projects/FastDistill/logs/dukemtmc/r34
-
 # _BASE_: Base-kd.yml
 
 # MODEL:
@@ -21,7 +7,21 @@ OUTPUT_DIR: projects/FastDistill/logs/dukemtmc/r34
 #     WITH_IBN: False
 
 # DATASETS:
-#   NAMES: ("SportsreID",)
-#   TESTS: ("SportsreID",)
+#   NAMES: ("DukeMTMC",)
+#   TESTS: ("DukeMTMC",)
 
-# OUTPUT_DIR: projects/FastDistill/logs/sports/r34
+# OUTPUT_DIR: projects/FastDistill/logs/dukemtmc/r34
+
+_BASE_: Base-kd.yml
+
+MODEL:
+  BACKBONE:
+    DEPTH: 34x
+    FEAT_DIM: 512
+    WITH_IBN: False
+
+DATASETS:
+  NAMES: ("SportsreID",)
+  TESTS: ("SportsreID",)
+
+OUTPUT_DIR: projects/FastDistill/logs/sports/r34

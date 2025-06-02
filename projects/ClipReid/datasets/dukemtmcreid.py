@@ -93,16 +93,23 @@ class DukeMTMCreID(BaseImageDataset):
         for img_path in img_paths:
             pid, _ = map(int, pattern.search(img_path).groups())
             pid_container.add(pid)
+        print("pid_container:", pid_container)
+        pid_container = sorted(pid_container)
+        print("pid_container:", pid_container)
         pid2label = {pid: label for label, pid in enumerate(pid_container)}
 
         dataset = []
         cam_container = set()
+        mapping = dict.fromkeys(range(702), None)
+        ii = 0
         for img_path in img_paths:
+            ii += 1
             pid, camid = map(int, pattern.search(img_path).groups())
             assert 1 <= camid <= 8
             camid -= 1  # index starts from 0
             if relabel: pid = pid2label[pid]
             dataset.append((img_path, self.pid_begin + pid, camid, 0))
             cam_container.add(camid)
-        print(cam_container, 'cam_container')
+            if ii<100:
+                print(f"Image Path: {img_path}, PID: {pid}, CAMID: {camid}")
         return dataset

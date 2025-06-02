@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import datetime
 import torch
 import torch.nn as nn
 from utils.meter import AverageMeter
@@ -70,6 +71,7 @@ def do_train_stage2(cfg,
             text_features.append(text_feature.cpu())
         text_features = torch.cat(text_features, 0).cuda()
 
+    
     for epoch in range(1, epochs + 1):
         start_time = time.time()
         loss_meter.reset()
@@ -179,7 +181,6 @@ def do_train_stage2(cfg,
                 for r in [1, 5, 10]:
                     logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
                 torch.cuda.empty_cache()
-
     all_end_time = time.monotonic()
     total_time = timedelta(seconds=all_end_time - all_start_time)
     logger.info("Total running time: {}".format(total_time))
@@ -206,6 +207,9 @@ def do_inference(cfg,
     model.eval()
     img_path_list = []
 
+    # 记录开始时间
+    start_time = time.perf_counter()
+    sum_time = 0
     for n_iter, (img, pid, camid, camids, target_view, imgpath) in enumerate(val_loader):
         with torch.no_grad():
             img = img.to(device)
@@ -217,12 +221,38 @@ def do_inference(cfg,
                 target_view = target_view.to(device)
             else: 
                 target_view = None
+            
+            # 记录每个批次开始时的时间
+            batch_start_time = time.perf_counter()
+
             feat = model(img, cam_label=camids, view_label=target_view)
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
 
+            # 计算批次的推理时间
+            batch_end_time = time.perf_counter()
+            batch_time = batch_end_time - batch_start_time
 
-    cmc, mAP, _, _, _, _, _ = evaluator.compute()
+            # 计算每张图片的推理时间
+            batch_size = img.size(0)  # 批次大小
+            img_time = batch_time / batch_size  # 每张图像的推理时间
+            sum_time += img_time
+            # if n_iter % 10 == 0:  # 每10个批次打印一次
+            #     logger.info(f"Batch {n_iter} - Time per image: {img_time:.4f}s")
+
+    # 计算总的推理时间
+    total_end_time = time.perf_counter()
+    #total_time = total_end_time - start_time
+    total_time = sum_time
+    total_time_str = str(datetime.timedelta(seconds=total_time))
+
+    logger.info(f"Total inference time: {total_time_str} ({total_time / len(val_loader.dataset):.6f}s per image)")
+
+
+    cmc, mAP, _, _, _, _ ,_ ,_= evaluator.compute(
+        g_paths=img_path_list[num_query:], 
+        q_paths=img_path_list[:num_query]  
+    )
     logger.info("Validation Results ")
     logger.info("mAP: {:.1%}".format(mAP))
     for r in [1, 5, 10]:

@@ -41,6 +41,13 @@ if __name__ == "__main__":
     train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
 
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)
+    print("model is : {}".format(model))
+    #打印model每一层的参数
+    for name, param in model.named_parameters():
+        print(name, param.size())
+    #打印model每一层的参数量
+    for name, param in model.named_parameters():
+        print(name, param.numel())
     model.load_param(cfg.TEST.WEIGHT)
 
     if cfg.DATASETS.NAMES == 'VehicleID':

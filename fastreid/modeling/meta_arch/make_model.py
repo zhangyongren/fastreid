@@ -75,74 +75,25 @@ class build_transformer(nn.Module):
         #从 CLIP 模型中提取出 visual 模块，作为图像的特征提取器
         self.image_encoder = clip_model.visual
 
-        #自定义视角嵌入（SIE）
-        #SIE_CAMERA 或 SIE_VIEW，则根据相机数量和视角数量初始化一个参数矩阵 cv_embed，这个矩阵会在训练中学习
-        #trunc_normal_ 用于初始化权重
-        if cfg.MODEL.SIE_CAMERA and cfg.MODEL.SIE_VIEW:
-            print("SIE_CAMERA and SIE_VIEW")
-            self.cv_embed = nn.Parameter(torch.zeros(camera_num * view_num, self.in_planes))
-            trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(camera_num))
-        elif cfg.MODEL.SIE_CAMERA:
-            print("SIE_CAMERA")
-            self.cv_embed = nn.Parameter(torch.zeros(camera_num, self.in_planes))
-            trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(camera_num))
-        elif cfg.MODEL.SIE_VIEW:
-            print("SIE_VIEW")
-            self.cv_embed = nn.Parameter(torch.zeros(view_num, self.in_planes))
-            trunc_normal_(self.cv_embed, std=.02)
-            print('camera number is : {}'.format(view_num))
 
     def forward(self, x, label=None, cam_label= None, view_label=None):   #x是输入的图像，label 是对应的标签，cam_label 和 view_label 是相机和视角的标签
         # x.shape: torch.Size([256, 3, 256, 128])
-        #print("label:", label)
-        if self.model_name == 'RN50':
-            #对于 RN50，从 CLIP 编码器提取图像特征，并通过平均池化（avg_pool2d）获得全局特征。
-            image_features_last, image_features, image_features_proj = self.image_encoder(x) #B,512  B,128,512
-            img_feature_last = nn.functional.avg_pool2d(image_features_last, image_features_last.shape[2:4]).view(x.shape[0], -1) 
-            img_feature = nn.functional.avg_pool2d(image_features, image_features.shape[2:4]).view(x.shape[0], -1) 
-            img_feature_proj = image_features_proj[0]
-
-        elif self.model_name == 'ViT-B-16':
-            #对于 ViT-B-16，同样从 CLIP 编码器提取图像特征。还根据相机和视角标签进行嵌入
-            if cam_label != None and view_label!=None:
-                cv_embed = self.sie_coe * self.cv_embed[cam_label * self.view_num + view_label]
-            elif cam_label != None:
-                cv_embed = self.sie_coe * self.cv_embed[cam_label]
-            elif view_label!=None:
-                cv_embed = self.sie_coe * self.cv_embed[view_label]
-            else:
-                cv_embed = None
-            #img_feature 是经过基础的图像特征提取网络（如 ResNet 或 Vision Transformer）得到的原始特征，表示的是图像的高层次语义信息。
-            #img_feature_proj 是经过额外投影处理后的特征，通常用于分类或其他任务，其维度通常较小，并且与目标任务（如类别区分）更为相关
-            image_features_last, image_features, image_features_proj = self.image_encoder(x, cv_embed) #B,512  B,128,512
-            img_feature_last = image_features_last[:,0]
-            img_feature = image_features[:,0]
-            img_feature_proj = image_features_proj[:,0]
+        cv_embed = None
+        image_features_last, image_features, image_features_proj = self.image_encoder(x, cv_embed) #B,512  B,128,512
+        img_feature_last = image_features_last[:,0]
+        img_feature = image_features[:,0]
+        img_feature_proj = image_features_proj[:,0]
 
         #通过瓶颈层：将图像特征和投影特征传入 BatchNorm 层进行标准化
         feat = self.bottleneck(img_feature) 
         feat_proj = self.bottleneck_proj(img_feature_proj) 
 
-        if self.training:
-            cls_score = self.classifier(feat)  #([256, 702])  256是batch_size，702是类别数
-            cls_score_proj = self.classifier_proj(feat_proj)   #([256, 702])
-            # print("cls_score:", cls_score)
-            # print("cls_score_proj:", cls_score_proj)
-            
-            # max_prob, predicted_class = torch.max(cls_score, dim=1)
-            # print("predicted_class:", predicted_class)
-            return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj]
+        cls_score = self.classifier(feat)  #([256, 702])  256是batch_size，702是类别数
+        cls_score_proj = self.classifier_proj(feat_proj)   #([256, 702])
+        
+        return [cls_score, cls_score_proj], [img_feature_last, img_feature, img_feature_proj]
 
-        else:
-            if self.neck_feat == 'after':
-                # print("Test with feature after BN")
-                return torch.cat([feat, feat_proj], dim=1)
-            else:
-                #img_feature.shape (64,768)
-                #img_feature_proj.shape (64,512)
-                return torch.cat([img_feature, img_feature_proj], dim=1)
+        
 
 
     def load_param(self, trained_path):

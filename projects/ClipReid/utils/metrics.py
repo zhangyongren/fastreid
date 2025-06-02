@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import os
 from utils.reranking import re_ranking
 
 
@@ -15,76 +14,45 @@ def euclidean_distance(qf, gf):
 def cosine_similarity(qf, gf):
     epsilon = 0.00001
     dist_mat = qf.mm(gf.t())
-    qf_norm = torch.norm(qf, p=2, dim=1, keepdim=True)  # mx1
-    gf_norm = torch.norm(gf, p=2, dim=1, keepdim=True)  # nx1
+    qf_norm = torch.norm(qf, p=2, dim=1, keepdim=True)
+    gf_norm = torch.norm(gf, p=2, dim=1, keepdim=True)
     qg_normdot = qf_norm.mm(gf_norm.t())
-
     dist_mat = dist_mat.mul(1 / qg_normdot).cpu().numpy()
     dist_mat = np.clip(dist_mat, -1 + epsilon, 1 - epsilon)
     dist_mat = np.arccos(dist_mat)
     return dist_mat
 
 
-def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
-    """Evaluation with market1501 metric
-        Key: for each query identity, its gallery images from the same camera view are discarded.
-        """
-    num_q, num_g = distmat.shape  #获取查询集（num_q）和图库集（num_g）的样本数。
-    # distmat g
-    #    q    1 3 2 4
-    #         4 1 2 3
+def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, g_paths=None, max_rank=50):
+    num_q, num_g = distmat.shape
     if num_g < max_rank:
         max_rank = num_g
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
+
     indices = np.argsort(distmat, axis=1)
-    #  0 2 1 3
-    #  1 2 3 0
-    #通过比较查询图像与图库图像的ID来构建一个匹配矩阵。如果查询图像的ID与图库图像的ID相同，则认为它们是匹配的
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
 
-    # compute cmc curve for each query
+    top10_pids = g_pids[indices[:, :10]]
+    top10_indices = indices[:, :10]
+
     all_cmc = []
     all_AP = []
-    num_valid_q = 0.  # number of valid query
-    
+    num_valid_q = 0.
+
     for q_idx in range(num_q):
-        first_query_indices = indices[q_idx]  # 这是一个包含 17661 个元素的数组
-        first_query_gallery_pids = g_pids[first_query_indices]
-        predicted_pid = first_query_gallery_pids[0]  # 排名第一的 PID 即为预测标签
-        print("predict_id" ,predicted_pid)
-        print("target:",q_pids[q_idx])
-
-
-        # 获取每个查询的真实ID和相机ID。
-        q_pid = q_pids[q_idx]
-        q_camid = q_camids[q_idx]
-
-        # remove gallery samples that have the same pid and camid with query
-        order = indices[q_idx]  # select one row
-        # remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
-        # keep = np.invert(remove)
-
-        # 直接保留所有图库图像
+        order = indices[q_idx]
         keep = np.ones_like(order, dtype=bool)
-
-        # compute cmc curve
-        # binary vector, positions with value 1 are correct matches
         orig_cmc = matches[q_idx][keep]
         if not np.any(orig_cmc):
-            # this condition is true when query identity does not appear in gallery
             continue
 
         cmc = orig_cmc.cumsum()
         cmc[cmc > 1] = 1
-
         all_cmc.append(cmc[:max_rank])
         num_valid_q += 1.
 
-        # compute average precision
-        # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
         num_rel = orig_cmc.sum()
         tmp_cmc = orig_cmc.cumsum()
-        #tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
         y = np.arange(1, tmp_cmc.shape[0] + 1) * 1.0
         tmp_cmc = tmp_cmc / y
         tmp_cmc = np.asarray(tmp_cmc) * orig_cmc
@@ -97,7 +65,7 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
     all_cmc = all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
 
-    return all_cmc, mAP
+    return all_cmc, mAP, top10_pids, top10_indices
 
 
 class R1_mAP_eval():
@@ -113,40 +81,49 @@ class R1_mAP_eval():
         self.pids = []
         self.camids = []
 
-    def update(self, output):  # called once for each batch
+    def update(self, output):
         feat, pid, camid = output
         self.feats.append(feat.cpu())
         self.pids.extend(np.asarray(pid))
         self.camids.extend(np.asarray(camid))
 
-    def compute(self):  # called after each epoch
-        print("feats.shape:", len(self.feats))  #311
+    def compute(self, g_paths=None, q_paths=None):
+        print("feats.shape:", len(self.feats))
         feats = torch.cat(self.feats, dim=0)
-        print("feats.shape:", feats.shape)  #311*64 = 19889=2228+17661  (19889,1280)
+        print("feats.shape:", feats.shape)
+
         if self.feat_norm:
             print("The test feature is normalized")
-            feats = torch.nn.functional.normalize(feats, dim=1, p=2)  # along channel
-        # query
+            feats = torch.nn.functional.normalize(feats, dim=1, p=2)
+
         qf = feats[:self.num_query]
-        #print("num_query:",self.num_query)  #num_query=2228,查询集总数
         q_pids = np.asarray(self.pids[:self.num_query])
         q_camids = np.asarray(self.camids[:self.num_query])
-        # gallery
         gf = feats[self.num_query:]
         g_pids = np.asarray(self.pids[self.num_query:])
-
         g_camids = np.asarray(self.camids[self.num_query:])
+
         if self.reranking:
             print('=> Enter reranking')
-            # distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
             distmat = re_ranking(qf, gf, k1=50, k2=15, lambda_value=0.3)
-
-        else:  #本实验选项
+        else:
             print('=> Computing DistMat with euclidean_distance')
             distmat = euclidean_distance(qf, gf)
-        cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
 
-        return cmc, mAP, distmat, self.pids, self.camids, qf, gf
+        cmc, mAP, top10_ids, top10_indices = eval_func(distmat, q_pids, g_pids, q_camids, g_camids, g_paths=g_paths, max_rank=self.max_rank)
 
+        print("示例输出：每个查询的前十个 Gallery 匹配结果：")
+        for i in range(min(len(top10_ids),1)):
+            top10_pid_list = top10_ids[i].tolist()
+            top10_index_list = top10_indices[i].tolist()
 
+            query_path = q_paths[i] if q_paths is not None else "未知路径"
+            print(f"\nQuery {i} (真实ID {q_pids[i]}, 路径 = {query_path}) 的 Top-10 Gallery 匹配:")
+            
+            for rank, (pid, index) in enumerate(zip(top10_pid_list, top10_index_list), 1):
+                info = f"  Top-{rank}: PID = {pid}, 索引 = {index}"
+                if g_paths is not None:
+                    info += f", 图像路径 = {g_paths[index]}"
+                print(info)
 
+        return cmc, mAP, distmat, self.pids, self.camids, qf, gf, top10_ids

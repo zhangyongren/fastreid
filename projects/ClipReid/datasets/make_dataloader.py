@@ -82,7 +82,7 @@ def make_dataloader(cfg):
                 collate_fn=train_collate_fn,
                 pin_memory=True,
             )
-        else:
+        else:#本实验所采用
             train_loader = DataLoader(
                 train_set, batch_size=cfg.SOLVER.IMS_PER_BATCH,
                 sampler=RandomIdentitySampler(dataset.train, cfg.SOLVER.IMS_PER_BATCH, cfg.DATALOADER.NUM_INSTANCE),
